@@ -37,7 +37,7 @@ int main(int argc, char* argv[]) {
         RtpTransport rtp_transport;
         
         // 初始化RTP传输
-        rtp_transport.initialize("127.0.0.1", 8888);
+        rtp_transport.initialize("127.0.0.1", 8889); // 使用接收端的端口
         
         // 设置负载类型为H.264（这里我们使用H.264的负载类型，但实际上传输的是YUV数据）
         rtp_transport.setPayloadType(96);
@@ -55,6 +55,9 @@ int main(int argc, char* argv[]) {
             frame_count++;
             LOG_INFO("Sending frame " + std::to_string(frame_count));
             
+            // 检查是否需要发送关键帧 (IPPP模式)
+            bool is_key_frame = (frame_count == 1); // 第一帧作为关键帧，后续为P帧
+            
             // 切片发送
             size_t offset = 0;
             while (offset < frame_size) {
@@ -62,10 +65,15 @@ int main(int argc, char* argv[]) {
                 size_t current_packet_size = std::min(packet_size, frame_size - offset);
                 
                 // 发送RTP包
-                rtp_transport.sendRtpPacket(frame_buffer + offset, current_packet_size);
+                rtp_transport.sendRtpPacket(frame_buffer + offset, current_packet_size, is_key_frame);
                 
                 // 更新偏移量
                 offset += current_packet_size;
+                
+                // 检查是否有RTCP包需要处理
+                uint8_t rtcp_buffer[1500];
+                size_t rtcp_size = 0;
+                rtp_transport.receiveRtcpPacket(rtcp_buffer, 1500, rtcp_size);
                 
                 // 短暂延迟，模拟实际网络传输
                 std::this_thread::sleep_for(std::chrono::milliseconds(1));
@@ -79,8 +87,14 @@ int main(int argc, char* argv[]) {
                 rtp_transport.sendRtcpPacket(RtcpPacketType::SR, rtcp_data, 20);
             }
             
+            // 检查是否有RTCP包需要处理
+            uint8_t rtcp_buffer[1500];
+            size_t rtcp_size = 0;
+            rtp_transport.receiveRtcpPacket(rtcp_buffer, 1500, rtcp_size);
+            
             // 按照指定的帧率等待
             std::this_thread::sleep_for(std::chrono::milliseconds(1000 / fps));
+
         }
         
         // 发送RTCP再见包

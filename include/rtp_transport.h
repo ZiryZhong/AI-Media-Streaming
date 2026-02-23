@@ -3,6 +3,8 @@
 
 #include <memory>
 #include <string>
+#include <vector>
+#include <map>
 #include "network_transport.h"
 
 // RTP包的最大大小
@@ -28,8 +30,31 @@ enum class RtcpPacketType {
     RR = 201,    // 接收报告
     SDES = 202,  // 源描述
     BYE = 203,   // 再见
-    APP = 204    // 应用特定
+    APP = 204,   // 应用特定
+    NACK = 205   // 否定确认（用于请求重传）
 };
+
+// NACK包结构
+typedef struct {
+    uint32_t ssrc;          // 同步源标识符
+    uint16_t lost_packets;  // 丢失的数据包数量
+    uint16_t first_seq;      // 第一个丢失的数据包序列号
+    // 后续可以添加更多丢失的序列号
+} NackPacket;
+
+// 关键帧请求结构
+typedef struct {
+    uint32_t ssrc;          // 同步源标识符
+    uint8_t request_type;   // 请求类型：1表示关键帧请求
+} KeyFrameRequest;
+
+// 数据包缓存项
+typedef struct {
+    uint16_t sequence;      // 序列号
+    uint32_t timestamp;     // 时间戳
+    std::vector<uint8_t> data; // 数据包数据
+    bool is_key_frame;      // 是否为关键帧
+} PacketCacheItem;
 
 // RTCP头部结构
 typedef struct {
@@ -49,8 +74,18 @@ private:
     uint32_t ssrc;
     uint8_t payload_type;
     
+    // 数据包缓存，用于重传
+    std::map<uint16_t, PacketCacheItem> packet_cache;
+    size_t max_cache_size; // 最大缓存大小
+    
     // 生成随机SSRC
     uint32_t generateSSRC();
+    
+    // 处理NACK请求
+    void handleNackRequest(const NackPacket& nack);
+    
+    // 处理关键帧请求
+    void handleKeyFrameRequest(const KeyFrameRequest& request);
     
 public:
     RtpTransport();
@@ -60,7 +95,7 @@ public:
     void initialize(const std::string& address, int port);
     
     // 发送RTP包
-    void sendRtpPacket(const uint8_t* data, size_t size);
+    void sendRtpPacket(const uint8_t* data, size_t size, bool is_key_frame = false);
     
     // 接收RTP包
     void receiveRtpPacket(uint8_t* buffer, size_t bufferSize, size_t& receivedSize);
@@ -70,6 +105,12 @@ public:
     
     // 接收RTCP包
     void receiveRtcpPacket(uint8_t* buffer, size_t bufferSize, size_t& receivedSize);
+    
+    // 发送NACK请求
+    void sendNackRequest(uint16_t first_seq, uint16_t lost_packets);
+    
+    // 发送关键帧请求
+    void sendKeyFrameRequest();
     
     // 关闭传输
     void close();

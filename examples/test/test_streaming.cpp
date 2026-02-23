@@ -27,6 +27,8 @@ int main() {
 
     // 创建并设置网络传输
     auto network = createNetworkTransport();
+    // 初始化网络传输，使用本地地址和端口8888
+    network->initialize("127.0.0.1", 8888);
     session->setNetworkTransport(network);
 
     // 启动流媒体传输
@@ -38,6 +40,9 @@ int main() {
 
     // 停止流媒体传输
     session->stopStreaming();
+
+    // 关闭网络传输
+    network->close();
 
     // 移除会话
     manager.removeSession("test_session");
